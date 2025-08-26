@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  bitcoin-regtest:
+    image: ruimarinho/bitcoin-core:latest
+    container_name: btc-testflow-regtest
+    ports:
+      - "18443:18443"  # RPC port
+      - "18444:18444"  # P2P port
+    volumes:
+      - bitcoin_data:/home/bitcoin/.bitcoin
+    command: >
+      bitcoind
+      -regtest
+      -server=1
+      -rpcallowip=0.0.0.0/0
+      -rpcbind=0.0.0.0:18443
+      -rpcuser=bitcoin
+      -rpcpassword=bitcoin
+      -fallbackfee=0.00001
+      -txindex=1
+      -zmqpubrawblock=tcp://0.0.0.0:28332
+      -zmqpubrawtx=tcp://0.0.0.0:28333
+    healthcheck:
+      test: ["CMD", "bitcoin-cli", "-regtest", "-rpcuser=bitcoin", "-rpcpassword=bitcoin", "getblockchaininfo"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - btc-testflow
+
+  btc-testflow-app:
+    build: .
+    container_name: btc-testflow-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_BITCOIN_RPC_HOST=bitcoin-regtest
+      - VITE_BITCOIN_RPC_PORT=18443
+      - VITE_BITCOIN_RPC_USER=bitcoin
+      - VITE_BITCOIN_RPC_PASSWORD=bitcoin
+    depends_on:
+      bitcoin-regtest:
+        condition: service_healthy
+    networks:
+      - btc-testflow
+    restart: unless-stopped
+
+volumes:
+  bitcoin_data:
+    driver: local
+
+networks:
+  btc-testflow:
+    driver: bridge
